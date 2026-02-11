@@ -5,61 +5,98 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vibe-Vote: Abstimmen</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .voted { opacity: 0.5; pointer-events: none; filter: grayscale(1); }
+    </style>
 </head>
-<body class="bg-indigo-600 flex items-center justify-center min-h-screen p-4">
-    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 text-center">
-        <h2 id="q-text" class="text-2xl font-bold mb-6 text-slate-800 italic">Lade Frage...</h2>
+<body class="bg-indigo-600 flex items-center justify-center min-h-screen p-4 font-sans">
+
+    <div id="main-card" class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
+        <h2 id="q-text" class="text-2xl font-extrabold mb-8 text-slate-800 leading-tight">Lade Frage...</h2>
         
-        <div id="mc-area" class="grid gap-3 hidden"></div>
+        <div id="mc-area" class="grid gap-4 hidden">
+            </div>
         
-        <div id="text-area" class="hidden space-y-3">
-            <input id="text-input" type="text" class="w-full p-4 border-2 rounded-xl" placeholder="Deine Antwort...">
-            <button onclick="submit('TEXT')" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold">Absenden</button>
+        <div id="text-area" class="hidden space-y-4">
+            <input id="text-input" type="text" class="w-full p-4 border-2 border-slate-200 rounded-2xl focus:border-indigo-500 outline-none shadow-sm" placeholder="Deine Antwort...">
+            <button onclick="submit('TEXT')" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-indigo-700 transition">Absenden</button>
         </div>
 
-        <p id="thanks" class="hidden text-green-600 font-bold text-xl animate-pulse">Danke! Gesendet. ✅</p>
+        <div id="thanks" class="hidden py-8">
+            <div class="text-6xl mb-4 text-emerald-500">✅</div>
+            <p class="text-xl font-bold text-emerald-600 uppercase tracking-wider">Erhalten!</p>
+            <p class="text-slate-400 text-sm mt-2">Warte auf das Ergebnis am Beamer.</p>
+        </div>
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxHvruOJa6GcTvNJyXXl1Xz-NU0YrtiYQUF0SJchH9AxqA__-h2UG6FeYLPiJc-FGS1/exec";
+        const SCRIPT_URL = "DEINE_WEB_APP_URL"; // WICHTIG: Hier deine URL eintragen!
+
+        // 1. Daten aus der URL (vom QR-Code) auslesen
         const params = new URLSearchParams(window.location.search);
         const qId = params.get('id');
-        const qType = params.get('type');
         const qText = params.get('q');
-        const qOpts = params.get('opts') ? params.get('opts').split(',') : [];
+        const qOptsRaw = params.get('opts'); // Das ist der String "Ja;Nein;..."
 
-        document.getElementById('q-text').innerText = qText;
+        // 2. Anzeige der Frage
+        document.getElementById('q-text').innerText = qText || "Keine Frage aktiv";
 
-        if(qType === 'MC') {
+        // 3. Logik: Buttons bauen oder Textfeld zeigen
+        if (qOptsRaw && qOptsRaw.trim() !== "" && qOptsRaw !== "undefined") {
+            // MULTIPLE CHOICE MODUS
             const area = document.getElementById('mc-area');
             area.classList.remove('hidden');
-            qOpts.forEach(opt => {
-                const btn = document.createElement('button');
-                btn.className = "p-4 bg-slate-100 hover:bg-indigo-100 border-2 border-slate-200 rounded-xl font-bold transition";
-                btn.innerText = opt;
-                btn.onclick = () => submit(opt);
-                area.appendChild(btn);
+            
+            // Hier passiert die Magie: String am Semikolon trennen
+            const options = qOptsRaw.split(';'); 
+            
+            options.forEach(opt => {
+                if(opt.trim() !== "") {
+                    const btn = document.createElement('button');
+                    btn.className = "p-5 bg-slate-50 hover:bg-indigo-50 border-2 border-slate-100 hover:border-indigo-200 rounded-2xl font-bold text-slate-700 transition-all shadow-sm text-lg active:scale-95";
+                    btn.innerText = opt.trim();
+                    btn.onclick = () => submit(opt.trim());
+                    area.appendChild(btn);
+                }
             });
         } else {
+            // FREITEXT MODUS
             document.getElementById('text-area').classList.remove('hidden');
         }
 
+        // 4. Abstimmung absenden
         async function submit(val) {
-            if(localStorage.getItem(qId)) return alert("Schon abgestimmt!");
-            const answer = val === 'TEXT' ? document.getElementById('text-input').value : val;
-            
-            localStorage.setItem(qId, "true");
+            // Doppeltes Abstimmen verhindern
+            if (localStorage.getItem(qId)) {
+                alert("Du hast für diese Frage bereits abgestimmt!");
+                return;
+            }
+
+            const finalAnswer = (val === 'TEXT') ? document.getElementById('text-input').value : val;
+            if (!finalAnswer) return;
+
+            // UI sperren
+            localStorage.setItem(qId, "voted");
             document.getElementById('mc-area').classList.add('hidden');
             document.getElementById('text-area').classList.add('hidden');
+            document.getElementById('q-text').classList.add('opacity-30');
             document.getElementById('thanks').classList.remove('hidden');
 
-            await fetch(SCRIPT_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                body: JSON.stringify({ questionId: qId, answer: answer, type: qType })
-            });
+            // Daten an Google senden
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({ 
+                        action: "vote", 
+                        questionId: qId, 
+                        answer: finalAnswer 
+                    })
+                });
+            } catch (e) {
+                console.error("Fehler beim Senden:", e);
+            }
         }
     </script>
 </body>
-
 </html>
