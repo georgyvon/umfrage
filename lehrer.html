@@ -43,7 +43,7 @@
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxHvruOJa6GcTvNJyXXl1Xz-NU0YrtiYQUF0SJchH9AxqA__-h2UG6FeYLPiJc-FGS1/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7K0Dgik0w9-igcqrVrymFovBCawjtkjepddDg58FkXyWlgfI-STGu-zAGy7yZq3nD/exec";
         let chart = null, currentQId = "", currentType = "", currentOptions = [], refreshInterval = null;
 
         // 1. Daten laden (Fragen)
@@ -120,7 +120,7 @@
 
         // 3. Statistik berechnen & anzeigen
         async function updateStats() {
-            const resp = await fetch(SCRIPT_URL);
+            const resp = await fetch(SCRIPT_URL + "?t=" + Date.now());
             const data = await resp.json();
             const relevant = data.answers.filter(a => a[1] === currentQId);
             
@@ -169,4 +169,5 @@
     </script>
 </body>
 </html>
+
 
