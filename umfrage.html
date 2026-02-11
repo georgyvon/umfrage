@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe-Vote Pro 🗳️</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.1.0/wordcloud2.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        .voted { opacity: 0.5; pointer-events: none; }
+    </style>
+</head>
+<body class="bg-slate-50 p-4 font-sans">
+
+    <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-indigo-600 tracking-tight">Vibe-Vote</h1>
+            <p class="text-slate-500">Live-Feedback für den Unterricht</p>
+        </header>
+
+        <div id="setup-area" class="space-y-4 border-l-4 border-indigo-500 pl-4 py-2">
+            <h2 class="text-lg font-bold">1. Frage vorbereiten</h2>
+            <input id="question-input" type="text" placeholder="Deine Frage (z.B. Wie findet ihr das Projekt?)" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none">
+            
+            <select id="type-input" onchange="toggleOptions()" class="w-full p-3 border rounded-lg bg-white">
+                <option value="MC">Single Choice (A, B, C, D)</option>
+                <option value="TEXT">Freitext (Wortwolke)</option>
+            </select>
+
+            <div id="mc-labels" class="grid grid-cols-2 gap-2">
+                <input id="label-A" type="text" placeholder="Option A" class="p-2 border rounded" value="Option A">
+                <input id="label-B" type="text" placeholder="Option B" class="p-2 border rounded" value="Option B">
+                <input id="label-C" type="text" placeholder="Option C" class="p-2 border rounded" value="Option C">
+                <input id="label-D" type="text" placeholder="Option D" class="p-2 border rounded" value="Option D">
+            </div>
+
+            <button onclick="startPoll()" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">Umfrage live schalten</button>
+        </div>
+
+        <div id="vote-area" class="hidden space-y-6">
+		    <div id="share-area" class="hidden text-center p-4 bg-white border rounded-xl shadow-sm mb-6">
+				<p class="text-sm font-bold text-gray-500 mb-2">Scanner zum Abstimmen:</p>
+				<div id="qrcode" class="flex justify-center"></div>
+				<p id="url-display" class="text-xs text-gray-400 mt-2 break-all"></p>
+			</div>
+            <div class="bg-indigo-50 p-4 rounded-lg text-center">
+                <h2 id="display-question" class="text-2xl font-bold text-indigo-900"></h2>
+            </div>
+            
+            <div id="options-mc" class="grid grid-cols-1 sm:grid-cols-2 gap-4 hidden">
+                <button id="btn-A" onclick="sendVote('A')" class="bg-blue-500 text-white p-4 rounded-xl shadow hover:scale-105 transition font-bold"></button>
+                <button id="btn-B" onclick="sendVote('B')" class="bg-emerald-500 text-white p-4 rounded-xl shadow hover:scale-105 transition font-bold"></button>
+                <button id="btn-C" onclick="sendVote('C')" class="bg-amber-500 text-white p-4 rounded-xl shadow hover:scale-105 transition font-bold"></button>
+                <button id="btn-D" onclick="sendVote('D')" class="bg-rose-500 text-white p-4 rounded-xl shadow hover:scale-105 transition font-bold"></button>
+            </div>
+
+            <div id="options-text" class="hidden flex gap-2">
+                <input id="text-answer" type="text" placeholder="Dein Begriff..." class="flex-1 p-3 border rounded-lg">
+                <button onclick="sendVote(document.getElementById('text-answer').value)" class="bg-indigo-600 text-white px-6 rounded-lg font-bold">Senden</button>
+            </div>
+            
+            <p id="voted-msg" class="hidden text-center text-green-600 font-medium italic">Danke! Deine Stimme wurde gezählt.</p>
+        </div>
+
+        <div id="result-area" class="mt-10 pt-10 border-t hidden">
+            <h3 class="text-center text-slate-400 uppercase tracking-widest text-sm mb-4">Live-Ergebnisse</h3>
+            <canvas id="myChart" class="max-h-64"></canvas>
+            <canvas id="wordcloud-canvas" width="600" height="300" class="w-full mt-4"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "DEINE_WEB_APP_URL_HIER_EINSETZEN";
+        let currentQuestionId = "";
+        let currentType = "";
+        let chart = null;
+
+        function toggleOptions() {
+            const isMC = document.getElementById('type-input').value === 'MC';
+            document.getElementById('mc-labels').classList.toggle('hidden', !isMC);
+        }
+
+        function startPoll() {
+            currentQuestionId = "Q-" + Math.random().toString(36).substr(2, 9);
+            currentType = document.getElementById('type-input').value;
+            
+            // Labels setzen
+            document.getElementById('btn-A').innerText = document.getElementById('label-A').value;
+            document.getElementById('btn-B').innerText = document.getElementById('label-B').value;
+            document.getElementById('btn-C').innerText = document.getElementById('label-C').value;
+            document.getElementById('btn-D').innerText = document.getElementById('label-D').value;
+            
+            document.getElementById('display-question').innerText = document.getElementById('question-input').value;
+            document.getElementById('setup-area').classList.add('hidden');
+            document.getElementById('vote-area').classList.remove('hidden');
+            document.getElementById('result-area').classList.remove('hidden');
+
+            if(currentType === 'MC') {
+                document.getElementById('options-mc').classList.remove('hidden');
+                document.getElementById('wordcloud-canvas').classList.add('hidden');
+                initChart();
+            } else {
+                document.getElementById('options-text').classList.remove('hidden');
+                document.getElementById('myChart').classList.add('hidden');
+            }
+            
+            setInterval(refreshResults, 3000);
+			
+			// QR-Code generieren
+			const currentUrl = window.location.href; // Nimmt die aktuelle URL der Datei
+			document.getElementById('share-area').classList.remove('hidden');
+			document.getElementById('qrcode').innerHTML = ""; // Altes löschen
+			new QRCode(document.getElementById("qrcode"), {
+				text: currentUrl,
+				width: 160,
+				height: 160
+			});
+			document.getElementById('url-display').innerText = currentUrl;
+			
+        }
+
+        async function sendVote(val) {
+            if (!val || localStorage.getItem(currentQuestionId)) return;
+
+            // Client-seitige Sperre
+            localStorage.setItem(currentQuestionId, "voted");
+            document.getElementById('options-mc').classList.add('voted');
+            document.getElementById('options-text').classList.add('voted');
+            document.getElementById('voted-msg').classList.remove('hidden');
+
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ questionId: currentQuestionId, answer: val, type: currentType })
+            });
+        }
+
+        async function refreshResults() {
+            try {
+                const resp = await fetch(SCRIPT_URL);
+                const data = await resp.json();
+                const relevant = data.filter(d => d.questionId === currentQuestionId);
+
+                if(currentType === 'MC') {
+                    const counts = { 'A': 0, 'B': 0, 'C': 0, 'D': 0 };
+                    relevant.forEach(r => { if(counts.hasOwnProperty(r.answer)) counts[r.answer]++; });
+                    chart.data.datasets[0].data = Object.values(counts);
+                    chart.update();
+                } else if (relevant.length > 0) {
+                    // Wortwolken-Logik: Wörter zählen
+                    const freq = {};
+                    relevant.forEach(r => {
+                        const word = r.answer.toLowerCase().trim();
+                        freq[word] = (freq[word] || 0) + 1;
+                    });
+                    const list = Object.entries(freq).map(([text, size]) => [text, size * 10 + 5]);
+                    WordCloud(document.getElementById('wordcloud-canvas'), { list: list, backgroundColor: '#ffffff' });
+                }
+            } catch (e) { console.error("Daten konnten nicht geladen werden", e); }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [
+                        document.getElementById('label-A').value, 
+                        document.getElementById('label-B').value, 
+                        document.getElementById('label-C').value, 
+                        document.getElementById('label-D').value
+                    ],
+                    datasets: [{
+                        label: 'Stimmen',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+                        borderRadius: 10
+                    }]
+                },
+                options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            });
+        }
+    </script>
+</body>
+</html>
