@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Vibe-Vote: Live-Statistik</title>
+    <title>Vibe-Vote: Lehrer-Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -18,26 +18,25 @@
                 <input id="new-q-opts" type="text" placeholder="Optionen (z.B. Ja;Nein) - Leer lassen für Wortwolke" class="flex-1 p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-400">
                 <button onclick="addQuestion()" class="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg">Speichern</button>
             </div>
-            
-            <div id="questions-list" class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 max-h-40 overflow-y-auto p-2">
-                </div>
+            <div id="questions-list" class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 max-h-40 overflow-y-auto p-2"></div>
         </div>
 
         <div id="live-area" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-            
             <div class="bg-white p-6 rounded-3xl shadow-xl border-4 border-indigo-100 flex flex-col items-center justify-center text-center">
-                <h3 class="text-indigo-600 font-black mb-4">JETZT ABSTIMMEN</h3>
-                <div id="qrcode" class="p-4 bg-white border-2 border-indigo-50 rounded-2xl mb-4"></div>
+                <h3 class="text-indigo-600 font-black mb-4 tracking-widest">JETZT ABSTIMMEN</h3>
+                <div id="qrcode" class="p-4 bg-white border-2 border-indigo-50 rounded-2xl mb-4 shadow-inner"></div>
                 <p id="active-q-title" class="text-xl font-bold text-slate-800 mb-2"></p>
-                <div class="bg-indigo-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-md">
-                    <span id="vote-count">0</span> Stimmen erhalten
+                <div class="bg-indigo-600 text-white px-6 py-2 rounded-full text-sm font-bold shadow-md">
+                    <span id="vote-count">0</span> Stimmen
                 </div>
             </div>
 
-            <div class="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl min-h-[400px] flex flex-col items-center justify-center">
-                <canvas id="resultChart" class="w-full h-full hidden"></canvas>
-                <canvas id="wordcloud-canvas" width="600" height="400" class="w-full h-full hidden"></canvas>
-                <div id="empty-state" class="text-slate-300 text-lg font-medium italic">Warte auf erste Ergebnisse...</div>
+            <div class="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl min-h-[450px] flex flex-col items-center justify-center">
+                <div class="w-full h-full relative">
+                    <canvas id="resultChart" class="hidden"></canvas>
+                    <canvas id="wordcloud-canvas" width="600" height="400" class="hidden w-full h-full"></canvas>
+                </div>
+                <div id="empty-state" class="text-slate-300 text-lg italic">Warte auf Teilnehmer...</div>
             </div>
         </div>
     </div>
@@ -46,12 +45,13 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7K0Dgik0w9-igcqrVrymFovBCawjtkjepddDg58FkXyWlgfI-STGu-zAGy7yZq3nD/exec";
         let chart = null, currentQId = "", currentType = "", currentOptions = [], refreshInterval = null;
 
-        // 1. Daten laden (Fragen)
         async function loadData() {
-            const resp = await fetch(SCRIPT_URL);
-            const data = await resp.json();
-            renderQuestions(data.questions);
-            return data;
+            try {
+                const resp = await fetch(SCRIPT_URL + "?t=" + Date.now());
+                const data = await resp.json();
+                renderQuestions(data.questions);
+                return data;
+            } catch(e) { console.error("Load failed", e); }
         }
 
         function renderQuestions(questions) {
@@ -60,90 +60,78 @@
             questions.forEach(q => {
                 const div = document.createElement('div');
                 div.className = "flex justify-between items-center p-3 bg-white border rounded-xl shadow-sm hover:border-indigo-300 transition";
-                div.innerHTML = `
-                    <span class="font-medium text-slate-700 truncate mr-2">${q[1]}</span>
+                div.innerHTML = `<span class="font-medium text-slate-700 truncate mr-2">${q[1]}</span>
                     <div class="flex gap-2">
                         <button onclick="startPoll('${q[0]}', '${q[1]}', '${q[2]}')" class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-indigo-600 hover:text-white transition">START</button>
                         <button onclick="deleteQuestion('${q[0]}')" class="text-slate-300 hover:text-red-500 transition text-xs font-bold">LÖSCHEN</button>
-                    </div>
-                `;
+                    </div>`;
                 list.appendChild(div);
             });
         }
 
-        // 2. Umfrage aktivieren
         function startPoll(id, text, opts) {
             currentQId = id;
-            currentOptions = opts && opts !== "undefined" ? opts.split(';') : [];
+            currentOptions = opts && opts !== "undefined" && opts.trim() !== "" ? opts.split(';') : [];
             currentType = currentOptions.length > 0 ? 'MC' : 'TEXT';
 
             document.getElementById('live-area').classList.remove('hidden');
             document.getElementById('active-q-title').innerText = text;
             
-            // QR-Code generieren
             const studentUrl = window.location.href.replace('lehrer.html', 'index.html') + 
-                               `?id=${id}&q=${encodeURIComponent(text)}&opts=${encodeURIComponent(opts)}&type=${currentType}`;
+                               `?id=${id}&q=${encodeURIComponent(text)}&opts=${encodeURIComponent(opts)}`;
+            
             document.getElementById('qrcode').innerHTML = "";
             new QRCode(document.getElementById("qrcode"), { text: studentUrl, width: 200, height: 200 });
 
-            // Chart initialisieren
             initVisuals();
-
-            // Live-Update starten
             if(refreshInterval) clearInterval(refreshInterval);
             refreshInterval = setInterval(updateStats, 3000);
             updateStats();
         }
 
         function initVisuals() {
+            document.getElementById('empty-state').classList.add('hidden');
             const chartCanvas = document.getElementById('resultChart');
             const cloudCanvas = document.getElementById('wordcloud-canvas');
-            document.getElementById('empty-state').classList.add('hidden');
 
             if (currentType === 'MC') {
-                chartCanvas.classList.remove('hidden');
-                cloudCanvas.classList.add('hidden');
+                chartCanvas.classList.remove('hidden'); cloudCanvas.classList.add('hidden');
                 if (chart) chart.destroy();
                 chart = new Chart(chartCanvas.getContext('2d'), {
                     type: 'bar',
                     data: {
-                        labels: currentOptions,
-                        datasets: [{ label: 'Stimmen', data: currentOptions.map(() => 0), backgroundColor: '#4f46e5', borderRadius: 10 }]
+                        labels: currentOptions.map(o => o.trim()),
+                        datasets: [{ label: 'Stimmen', data: currentOptions.map(() => 0), backgroundColor: '#4f46e5', borderRadius: 8 }]
                     },
                     options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                 });
             } else {
-                chartCanvas.classList.add('hidden');
-                cloudCanvas.classList.remove('hidden');
+                chartCanvas.classList.add('hidden'); cloudCanvas.classList.remove('hidden');
             }
         }
 
-        // 3. Statistik berechnen & anzeigen
         async function updateStats() {
-            const resp = await fetch(SCRIPT_URL + "?t=" + Date.now());
-            const data = await resp.json();
-            const relevant = data.answers.filter(a => a[1] === currentQId);
-            
-            document.getElementById('vote-count').innerText = relevant.length;
+            try {
+                const resp = await fetch(SCRIPT_URL + "?t=" + Date.now());
+                const data = await resp.json();
+                const relevant = data.answers.filter(a => String(a[1]) === String(currentQId));
+                
+                document.getElementById('vote-count').innerText = relevant.length;
+                if (relevant.length === 0) return;
 
-            if (relevant.length === 0) return;
-
-            if (currentType === 'MC') {
-                const counts = currentOptions.map(opt => relevant.filter(r => r[2] === opt.trim()).length);
-                chart.data.datasets[0].data = counts;
-                chart.update();
-            } else {
-                const freq = {};
-                relevant.forEach(r => {
-                    const word = r[2].toLowerCase().trim();
-                    freq[word] = (freq[word] || 0) + 1;
-                });
-                const list = Object.entries(freq).map(([text, size]) => [text, size * 15 + 10]);
-                WordCloud(document.getElementById('wordcloud-canvas'), { list: list, backgroundColor: '#ffffff', color: 'random-dark', weightFactor: 1 });
-            }
+                if (currentType === 'MC') {
+                    const counts = currentOptions.map(opt => relevant.filter(r => String(r[2]).trim() === opt.trim()).length);
+                    chart.data.datasets[0].data = counts;
+                    chart.update();
+                } else {
+                    const freq = {};
+                    relevant.forEach(r => { const w = String(r[2]).toLowerCase().trim(); freq[w] = (freq[w] || 0) + 1; });
+                    const list = Object.entries(freq).map(([text, size]) => [text, size * 15 + 10]);
+                    WordCloud(document.getElementById('wordcloud-canvas'), { list: list, backgroundColor: '#ffffff', color: 'random-dark' });
+                }
+            } catch(e) { console.error("Update error", e); }
         }
 
-        // CRUD Aktionen
         async function addQuestion() {
             const text = document.getElementById('new-q-text').value;
             const opts = document.getElementById('new-q-opts').value;
@@ -152,16 +140,12 @@
                 method: 'POST', mode: 'no-cors',
                 body: JSON.stringify({ action: "saveQuestion", id: "Q-"+Date.now(), text: text, options: opts })
             });
-            document.getElementById('new-q-text').value = "";
-            document.getElementById('new-q-opts').value = "";
+            document.getElementById('new-q-text').value = ""; document.getElementById('new-q-opts').value = "";
             setTimeout(loadData, 1500);
         }
 
         async function deleteQuestion(id) {
-            await fetch(SCRIPT_URL, {
-                method: 'POST', mode: 'no-cors',
-                body: JSON.stringify({ action: "deleteQuestion", id: id })
-            });
+            await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "deleteQuestion", id: id }) });
             setTimeout(loadData, 1500);
         }
 
@@ -169,5 +153,3 @@
     </script>
 </body>
 </html>
-
-
