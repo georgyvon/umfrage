@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Vibe-Vote: Editor & Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="bg-gray-100 p-5">
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-xl font-bold mb-4">Neue Frage erstellen</h2>
+            <div class="flex flex-col gap-3">
+                <input id="new-q-text" type="text" placeholder="Fragetext..." class="p-2 border rounded">
+                <input id="new-q-opts" type="text" placeholder="Optionen mit Semikolon trennen (leer lassen für Freitext)" class="p-2 border rounded text-sm">
+                <button onclick="addQuestion()" class="bg-green-600 text-white p-2 rounded font-bold">+ Frage speichern</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-xl font-bold mb-4">Deine Fragen</h2>
+            <div id="questions-list" class="space-y-2">
+                </div>
+        </div>
+
+        <div id="live-area" class="hidden bg-indigo-900 text-white p-6 rounded-xl shadow-lg text-center">
+            <h2 id="active-q-title" class="text-2xl font-bold mb-4"></h2>
+            <div id="qrcode" class="bg-white p-3 inline-block rounded mb-4"></div>
+            <p class="text-xs opacity-70">Schüler scannen diesen Code</p>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "DEINE_WEB_APP_URL";
+
+        async function loadData() {
+            const resp = await fetch(SCRIPT_URL);
+            const data = await resp.json();
+            renderQuestions(data.questions);
+        }
+
+        function renderQuestions(questions) {
+            const list = document.getElementById('questions-list');
+            list.innerHTML = "";
+            questions.forEach(q => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center p-3 border rounded hover:bg-gray-50";
+                div.innerHTML = `
+                    <span class="font-medium">${q[1]}</span>
+                    <div class="flex gap-2">
+                        <button onclick="startPoll('${q[0]}', '${q[1]}', '${q[2]}')" class="bg-blue-500 text-white px-3 py-1 rounded text-sm text-sm">Start</button>
+                        <button onclick="deleteQuestion('${q[0]}')" class="bg-red-500 text-white px-3 py-1 rounded text-sm">Löschen</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function addQuestion() {
+            const text = document.getElementById('new-q-text').value;
+            const opts = document.getElementById('new-q-opts').value;
+            const id = "Q-" + Date.now();
+            await fetch(SCRIPT_URL, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({ action: "saveQuestion", id: id, text: text, options: opts })
+            });
+            setTimeout(loadData, 1000); // Kurz warten bis Sheet aktualisiert
+        }
+
+        async function deleteQuestion(id) {
+            await fetch(SCRIPT_URL, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({ action: "deleteQuestion", id: id })
+            });
+            setTimeout(loadData, 1000);
+        }
+
+        function startPoll(id, text, opts) {
+            document.getElementById('live-area').classList.remove('hidden');
+            document.getElementById('active-q-title').innerText = text;
+            
+            const studentUrl = window.location.href.replace('lehrer.html', 'index.html') + 
+                               `?id=${id}&q=${encodeURIComponent(text)}&opts=${encodeURIComponent(opts)}&type=${opts ? 'MC' : 'TEXT'}`;
+            
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), { text: studentUrl, width: 160, height: 160 });
+        }
+
+        loadData();
+    </script>
+</body>
+</html>

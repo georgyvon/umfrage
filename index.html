@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe-Vote: Abstimmen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-indigo-600 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 text-center">
+        <h2 id="q-text" class="text-2xl font-bold mb-6 text-slate-800 italic">Lade Frage...</h2>
+        
+        <div id="mc-area" class="grid gap-3 hidden"></div>
+        
+        <div id="text-area" class="hidden space-y-3">
+            <input id="text-input" type="text" class="w-full p-4 border-2 rounded-xl" placeholder="Deine Antwort...">
+            <button onclick="submit('TEXT')" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold">Absenden</button>
+        </div>
+
+        <p id="thanks" class="hidden text-green-600 font-bold text-xl animate-pulse">Danke! Gesendet. ✅</p>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "DEINE_WEB_APP_URL";
+        const params = new URLSearchParams(window.location.search);
+        const qId = params.get('id');
+        const qType = params.get('type');
+        const qText = params.get('q');
+        const qOpts = params.get('opts') ? params.get('opts').split(',') : [];
+
+        document.getElementById('q-text').innerText = qText;
+
+        if(qType === 'MC') {
+            const area = document.getElementById('mc-area');
+            area.classList.remove('hidden');
+            qOpts.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "p-4 bg-slate-100 hover:bg-indigo-100 border-2 border-slate-200 rounded-xl font-bold transition";
+                btn.innerText = opt;
+                btn.onclick = () => submit(opt);
+                area.appendChild(btn);
+            });
+        } else {
+            document.getElementById('text-area').classList.remove('hidden');
+        }
+
+        async function submit(val) {
+            if(localStorage.getItem(qId)) return alert("Schon abgestimmt!");
+            const answer = val === 'TEXT' ? document.getElementById('text-input').value : val;
+            
+            localStorage.setItem(qId, "true");
+            document.getElementById('mc-area').classList.add('hidden');
+            document.getElementById('text-area').classList.add('hidden');
+            document.getElementById('thanks').classList.remove('hidden');
+
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ questionId: qId, answer: answer, type: qType })
+            });
+        }
+    </script>
+</body>
+</html>
