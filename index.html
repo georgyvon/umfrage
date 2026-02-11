@@ -5,100 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vibe-Vote: Abstimmen</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .voted { opacity: 0.5; pointer-events: none; filter: grayscale(1); }
-    </style>
 </head>
-<body class="bg-indigo-600 flex items-center justify-center min-h-screen p-4 font-sans">
-
-    <div id="main-card" class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
-        <h2 id="q-text" class="text-2xl font-extrabold mb-8 text-slate-800 leading-tight">Lade Frage...</h2>
+<body class="bg-indigo-600 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 text-center">
+        <h2 id="q-text" class="text-2xl font-bold mb-8 text-slate-800 italic leading-tight text-center">Lade Frage...</h2>
         
-        <div id="mc-area" class="grid gap-4 hidden">
-            </div>
+        <div id="mc-area" class="grid gap-4 hidden"></div>
         
         <div id="text-area" class="hidden space-y-4">
-            <input id="text-input" type="text" class="w-full p-4 border-2 border-slate-200 rounded-2xl focus:border-indigo-500 outline-none shadow-sm" placeholder="Deine Antwort...">
-            <button onclick="submit('TEXT')" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-indigo-700 transition">Absenden</button>
+            <input id="text-input" type="text" class="w-full p-4 border-2 rounded-2xl outline-none focus:border-indigo-500" placeholder="Deine Antwort...">
+            <button onclick="submit('TEXT')" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg">Absenden</button>
         </div>
 
-        <div id="thanks" class="hidden py-8">
+        <div id="thanks" class="hidden py-10">
             <div class="text-6xl mb-4 text-emerald-500">✅</div>
-            <p class="text-xl font-bold text-emerald-600 uppercase tracking-wider">Erhalten!</p>
-            <p class="text-slate-400 text-sm mt-2">Warte auf das Ergebnis am Beamer.</p>
+            <p class="text-xl font-bold text-emerald-600 uppercase">Erhalten!</p>
         </div>
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7K0Dgik0w9-igcqrVrymFovBCawjtkjepddDg58FkXyWlgfI-STGu-zAGy7yZq3nD/exec"; // WICHTIG: Hier deine URL eintragen!
-
-        // 1. Daten aus der URL (vom QR-Code) auslesen
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7K0Dgik0w9-igcqrVrymFovBCawjtkjepddDg58FkXyWlgfI-STGu-zAGy7yZq3nD/exec";
         const params = new URLSearchParams(window.location.search);
         const qId = params.get('id');
         const qText = params.get('q');
-        const qOptsRaw = params.get('opts'); // Das ist der String "Ja;Nein;..."
+        const qOpts = params.get('opts');
 
-        // 2. Anzeige der Frage
-        document.getElementById('q-text').innerText = qText || "Keine Frage aktiv";
+        document.getElementById('q-text').innerText = qText || "Warte auf Lehrer...";
 
-        // 3. Logik: Buttons bauen oder Textfeld zeigen
-        if (qOptsRaw && qOptsRaw.trim() !== "" && qOptsRaw !== "undefined") {
-            // MULTIPLE CHOICE MODUS
+        if (qOpts && qOpts !== "undefined" && qOpts.trim() !== "") {
             const area = document.getElementById('mc-area');
             area.classList.remove('hidden');
-            
-            // Hier passiert die Magie: String am Semikolon trennen
-            const options = qOptsRaw.split(';'); 
-            
-            options.forEach(opt => {
-                if(opt.trim() !== "") {
+            qOpts.split(';').forEach(opt => {
+                if(opt.trim()){
                     const btn = document.createElement('button');
-                    btn.className = "p-5 bg-slate-50 hover:bg-indigo-50 border-2 border-slate-100 hover:border-indigo-200 rounded-2xl font-bold text-slate-700 transition-all shadow-sm text-lg active:scale-95";
+                    btn.className = "p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:bg-indigo-50 transition shadow-sm";
                     btn.innerText = opt.trim();
                     btn.onclick = () => submit(opt.trim());
                     area.appendChild(btn);
                 }
             });
         } else {
-            // FREITEXT MODUS
             document.getElementById('text-area').classList.remove('hidden');
         }
 
-        // 4. Abstimmung absenden
         async function submit(val) {
-            // Doppeltes Abstimmen verhindern
-            if (localStorage.getItem(qId)) {
-                alert("Du hast für diese Frage bereits abgestimmt!");
-                return;
-            }
+            if (localStorage.getItem(qId)) return alert("Schon abgestimmt!");
+            const answer = val === 'TEXT' ? document.getElementById('text-input').value : val;
+            if(!answer) return;
 
-            const finalAnswer = (val === 'TEXT') ? document.getElementById('text-input').value : val;
-            if (!finalAnswer) return;
-
-            // UI sperren
             localStorage.setItem(qId, "voted");
             document.getElementById('mc-area').classList.add('hidden');
             document.getElementById('text-area').classList.add('hidden');
-            document.getElementById('q-text').classList.add('opacity-30');
             document.getElementById('thanks').classList.remove('hidden');
 
-            // Daten an Google senden
-            try {
-                await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify({ 
-                        action: "vote", 
-                        questionId: qId, 
-                        answer: finalAnswer 
-                    })
-                });
-            } catch (e) {
-                console.error("Fehler beim Senden:", e);
-            }
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ action: "vote", questionId: qId, answer: answer })
+            });
         }
     </script>
 </body>
 </html>
-
-
